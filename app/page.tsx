@@ -7,7 +7,7 @@ import { ROUTES } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { useInView } from "react-intersection-observer";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import Footer from "@/components/shared/footer";
 
 // Animation components with proper TypeScript types
@@ -115,6 +115,14 @@ export default function HomePage() {
       ]
     }
   ];
+
+  const [courses, setCourses] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/courses")
+      .then((res) => res.json())
+      .then((data) => setCourses(data.courses || []));
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-b from-background/10 to-background">
@@ -261,24 +269,24 @@ export default function HomePage() {
 
           {/* Featured Courses */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mt-16">
-            {[1, 2, 3, 4].map((course, index) => (
-              <Card key={index} className="hover:shadow-lg transition-all duration-300 border-0 bg-gradient-to-b from-muted/10 to-background group overflow-hidden">
+            {courses.map((course, index) => (
+              <Card key={course.id || index} className="hover:shadow-lg transition-all duration-300 border-0 bg-gradient-to-b from-muted/10 to-background group overflow-hidden">
                 <div className="relative rounded-lg overflow-hidden">
                   <motion.img
-                    src={`https://via.placeholder.com/300x200?text=Course+${index + 1}`}
-                    alt={`Course ${index + 1}`}
+                    src={course.thumbnail || `https://via.placeholder.com/300x200?text=Course+${index + 1}`}
+                    alt={course.title || `Course ${index + 1}`}
                     className="w-full h-auto object-cover"
                     whileHover={{ scale: 1.02 }}
                     transition={{ duration: 0.3 }}
                   />
                 </div>
                 <CardContent className="p-4">
-                  <CardTitle className="text-lg font-bold">Course Title {index + 1}</CardTitle>
+                  <CardTitle className="text-lg font-bold">{course.title || `Course Title ${index + 1}`}</CardTitle>
                   <CardDescription className="text-sm text-muted-foreground">
-                    Brief description of the course content and benefits.
+                    {course.description || "Brief description of the course content and benefits."}
                   </CardDescription>
                   <div className="flex items-center justify-between mt-4">
-                    <span className="text-primary font-bold">₹399</span>
+                    <span className="text-primary font-bold">₹{course.price || 399}</span>
                     <Badge variant="default">Premium</Badge>
                   </div>
                 </CardContent>

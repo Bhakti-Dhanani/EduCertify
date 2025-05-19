@@ -20,6 +20,10 @@ export async function GET(
   try {
     const courseId = params.id;
 
+    console.log("Received course ID in API:", courseId); // Debugging log
+    console.log("Prisma query input:", { id: courseId }); // Debugging log
+    console.log("Prisma query execution started");
+
     // Get the course with related data
     const course = await prisma.course.findUnique({
       where: {
@@ -41,10 +45,14 @@ export async function GET(
           },
         },
         modules: {
-          orderBy: {
-            order: "asc",
+          where: { type: "VIDEO" },
+          select: {
+            id: true,
+            title: true,
+            content: true,
           },
         },
+        assignments: true, // Include assignments
         _count: {
           select: {
             enrollments: true,
@@ -54,7 +62,11 @@ export async function GET(
       },
     });
 
+    console.log("Course fetched:", course); // Debugging log
+    console.log("Prisma query result:", course); // Debugging log
+
     if (!course) {
+      console.error("Course not found for ID:", courseId); // Debugging log
       return NextResponse.json(
         { error: "Course not found" },
         { status: 404 }
@@ -98,6 +110,7 @@ export async function PUT(
     });
 
     if (!course) {
+      console.error("Course not found for ID:", courseId); // Debugging log
       return NextResponse.json(
         { error: "Course not found" },
         { status: 404 }
@@ -190,6 +203,7 @@ export async function DELETE(
     });
 
     if (!course) {
+      console.error("Course not found for ID:", courseId); // Debugging log
       return NextResponse.json(
         { error: "Course not found" },
         { status: 404 }
