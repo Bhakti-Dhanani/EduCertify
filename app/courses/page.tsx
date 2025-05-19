@@ -1,5 +1,4 @@
 "use client";
-
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
@@ -57,7 +56,7 @@ export default function AllCoursesPage() {
               <p className="text-sm text-gray-600 mb-4">{course.description}</p>
               <div className="flex items-center justify-between">
                 <span className="text-primary font-bold">${course.price || "Free"}</span>
-                <Badge variant="default">Published</Badge>
+                <Badge variant="default">{course.published ? "Published" : "Draft"}</Badge>
               </div>
               <Link
                 href={`/courses/${course.id}`}

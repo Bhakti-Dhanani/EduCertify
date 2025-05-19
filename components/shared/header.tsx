@@ -6,7 +6,6 @@ import { ROUTES } from "@/lib/constants";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { useSession, signOut } from "next-auth/react";
-import AllCourses from "@/components/AllCourses";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 
@@ -27,8 +26,8 @@ export default function Header() {
         if (!response.ok) {
           throw new Error("Failed to fetch courses");
         }
-        const data: { courses: Course[] } = await response.json();
-        const filteredCourses = data.courses.filter((course) => course.published);
+        const data = await response.json();
+        const filteredCourses = data.courses.filter((course: Course) => course.published === true); // Explicitly filter published courses
         setPublishedCourses(filteredCourses);
       } catch (error) {
         console.error("Error fetching published courses:", error);
@@ -54,29 +53,13 @@ export default function Header() {
             </span>
           </Link>
           <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
-            {['Features', 'Pricing', 'Enterprise', 'About Us', 'Contact'].map((item) => (
+            {["Features", "Pricing", "Enterprise", "About Us", "Contact", "Courses"].map((item) => (
               <Link 
                 key={item} 
                 href={`/${item.toLowerCase().replace(/ /g, '-')}`} 
                 className="relative transition-colors hover:text-primary after:absolute after:-bottom-1 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
               >
                 {item}
-              </Link>
-            ))}
-            <Link 
-              key="Courses" 
-              href="/courses" 
-              className="relative transition-colors hover:text-primary after:absolute after:-bottom-1 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
-            >
-              Courses
-            </Link>
-            {publishedCourses.map((course) => (
-              <Link 
-                key={course.id} 
-                href={`/courses/${course.id}`} 
-                className="relative transition-colors hover:text-primary after:absolute after:-bottom-1 after:left-0 after:w-0 after:h-0.5 after:bg-primary after:transition-all hover:after:w-full"
-              >
-                {course.title}
               </Link>
             ))}
           </nav>

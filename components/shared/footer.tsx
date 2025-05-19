@@ -3,14 +3,19 @@ export default function Footer() {
     <footer className="w-full py-6 md:py-8 border-t text-sm">
       <div className="container px-4 md:px-6">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          <div className="col-span-2 space-y-2">
-            <div className="flex space-x-3 pt-1">
+          <div className="col-span-1 space-y-0">
+            <div className="flex flex-col space-y-4 pt-1">
               {['Twitter', 'LinkedIn', 'Facebook', 'YouTube'].map((social) => (
                 <a 
                   key={social} 
                   href="#" 
-                  className="text-muted-foreground hover:text-foreground transition-colors text-xs"
+                  className="text-muted-foreground hover:text-foreground transition-colors text-xs flex items-center"
                 >
+                  <img 
+                    src={`https://www.google.com/s2/favicons?domain=${social.toLowerCase()}.com`} 
+                    alt={`${social} logo`} 
+                    className="w-4 h-4 inline-block mr-2"
+                  />
                   {social}
                 </a>
               ))}
@@ -31,7 +36,7 @@ export default function Footer() {
             },
             {
               title: "Legal",
-              links: ["Privacy", "Terms", "Security", "Cookies"]
+              links: ["Privacy Policy", "Terms of Service", "Cookie Policy"]
             }
           ].map((section, index) => (
             <div key={index} className="space-y-2">

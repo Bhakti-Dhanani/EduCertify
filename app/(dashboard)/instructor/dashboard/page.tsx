@@ -61,10 +61,11 @@ export default function InstructorDashboardPage() {
           `/api/courses?instructorId=${session?.user?.id}`
         );
         if (!response.ok) {
-          throw new Error("Failed to fetch instructor's courses");
+          throw new Error("Failed to fetch courses");
         }
         const data = await response.json();
-        setCourses(data.courses);
+        const publishedCourses = data.courses.filter((course: Course) => course.published === true); // Filter only published courses
+        setCourses(publishedCourses);
       } catch (error) {
         console.error("Error fetching instructor's courses:", error);
       }
