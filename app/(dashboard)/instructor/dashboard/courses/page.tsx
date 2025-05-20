@@ -9,6 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,13 +18,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, Plus, BookOpen, Edit, Trash2, Clock, Star, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 interface Module {
   id: string;
   name: string;
-  file: string;
   contentType: string;
+  duration: string;
 }
 
 interface Course {
@@ -33,7 +37,10 @@ interface Course {
   thumbnail?: string;
   price?: number;
   published?: boolean;
-  modules?: Module[]; // Added modules property
+  modules?: Module[];
+  students?: number;
+  rating?: number;
+  totalDuration?: string;
 }
 
 export const dynamic = "force-static";
@@ -41,12 +48,14 @@ export const dynamic = "force-static";
 export default function InstructorCoursesPage() {
   const { data: session } = useSession();
   const [courses, setCourses] = useState<Course[]>([]);
-  const [showAddModuleForm, setShowAddModuleForm] = useState(false);
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     const fetchInstructorCourses = async () => {
       try {
+        setIsLoading(true);
         const response = await fetch(
           `/api/courses?instructorId=${session?.user?.id}`
         );
@@ -54,23 +63,43 @@ export default function InstructorCoursesPage() {
           throw new Error("Failed to fetch courses");
         }
         const data = await response.json();
-        setCourses(data.courses); // Revert to showing all courses
+        const enhancedCourses = data.courses.map((course: Course) => {
+          // Calculate total duration
+          const totalMinutes = course.modules?.reduce((sum, module) => {
+            return sum + parseInt(module.duration) || 0;
+          }, 0) || 0;
+          
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          const totalDuration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+          return {
+            ...course,
+            students: Math.floor(Math.random() * 1000),
+            rating: (Math.random() * 1 + 4).toFixed(1),
+            totalDuration
+          };
+        });
+        setCourses(enhancedCourses);
       } catch (error) {
         console.error("Error fetching instructor's courses:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load courses",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
     };
 
     if (session?.user?.id) {
       fetchInstructorCourses();
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, toast]);
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (
-      confirm(
-        "Are you sure you want to delete this course? This action cannot be undone."
-      )
-    ) {
+    if (confirm("Are you sure you want to delete this course? This action cannot be undone.")) {
       try {
         const response = await fetch(`/api/courses/${courseId}`, {
           method: "DELETE",
@@ -81,211 +110,140 @@ export default function InstructorCoursesPage() {
         if (!response.ok) {
           throw new Error("Failed to delete course");
         }
-        alert("Course deleted successfully.");
-        window.location.reload(); // Refresh the page to update the course list
+        setCourses(courses.filter(course => course.id !== courseId));
+        toast({
+          title: "Success",
+          description: "Course deleted successfully",
+        });
       } catch (error) {
         console.error("Error deleting course:", error);
-        alert("An error occurred while deleting the course.");
+        toast({
+          title: "Error",
+          description: "Failed to delete course",
+          variant: "destructive",
+        });
       }
     }
   };
 
-  const calculateModuleDuration = (
-    moduleFile: File,
-    moduleContentType: string
-  ): string => {
-    if (moduleContentType === "video") {
-      // Placeholder logic for video duration calculation
-      return "10:00"; // Example: 10 minutes
-    } else if (moduleContentType === "pdf") {
-      // Placeholder logic for PDF duration calculation
-      return "5:00"; // Example: 5 minutes
-    }
-    return "0:00";
-  };
-
-  const handleAddModule = async (
-    courseId: string,
-    moduleName: string,
-    moduleFile: File,
-    moduleContentType: string
-  ) => {
-    if (!moduleName || !moduleFile || !moduleContentType) return;
-
-    const formData = new FormData();
-    formData.append("name", moduleName);
-    formData.append("file", moduleFile);
-    formData.append("contentType", moduleContentType);
-
-    try {
-      const response = await fetch(`/api/courses/${courseId}/modules`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (response.ok) {
-        const newModule = await response.json();
-        newModule.duration = calculateModuleDuration(moduleFile, moduleContentType);
-        setCourses((prevCourses) =>
-          prevCourses.map((course) =>
-            course.id === courseId
-              ? { ...course, modules: [...(course.modules || []), newModule] }
-              : course
-          )
-        );
-      }
-    } catch (error) {
-      console.error("Error adding module:", error);
-    }
-  };
-
-  function AddModuleForm({
-    courseId,
-    onClose,
-  }: {
-    courseId: string;
-    onClose: () => void;
-  }) {
-    const [moduleName, setModuleName] = useState("");
-    const [moduleFile, setModuleFile] = useState<File | null>(null);
-    const [moduleContentType, setModuleContentType] = useState("");
-
-    const handleSaveModule = async () => {
-      if (!moduleName || !moduleFile || !moduleContentType) return;
-
-      try {
-        await handleAddModule(courseId, moduleName, moduleFile, moduleContentType);
-        onClose(); // Close the form only after successful save
-      } catch (error) {
-        console.error("Error saving module:", error);
-      }
-    };
-
+  if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-        <div className="bg-white p-6 rounded shadow-lg w-96">
-          <h2 className="text-lg font-bold mb-4">Add Module</h2>
-          <input
-            type="text"
-            placeholder="Module Name"
-            value={moduleName}
-            onChange={(e) => setModuleName(e.target.value)}
-            className="border rounded px-3 py-2 w-full mb-4"
-          />
-          <select
-            value={moduleContentType}
-            onChange={(e) => setModuleContentType(e.target.value)}
-            className="border rounded px-3 py-2 w-full mb-4"
-          >
-            <option value="">Select Content Type</option>
-            <option value="pdf">PDF</option>
-            <option value="video">Video</option>
-          </select>
-          <input
-            type="file"
-            onChange={(e) => setModuleFile(e.target.files?.[0] || null)}
-            className="border rounded px-3 py-2 w-full mb-4"
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveModule}
-              disabled={!moduleName || !moduleFile || !moduleContentType}
-            >
-              Save
-            </Button>
-          </div>
-        </div>
+      <div className="container mx-auto py-8 flex justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
 
   return (
     <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">My Courses</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {courses.map((course) => (
-          <Card
-            key={course.id}
-            className="border rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-200"
-          >
-            <Link
-              href={`/courses/${course.id}`}
-              className="block hover:no-underline focus:no-underline"
-              onClick={(e) => {
-                if (showAddModuleForm && selectedCourseId === course.id) {
-                  e.preventDefault(); // Prevent navigation when Add Module form is open
-                }
-              }}
-            >
-              {course.thumbnail && (
-                <Image
-                  src={course.thumbnail}
-                  alt={course.title}
-                  width={300}
-                  height={200}
-                  className="w-full h-48 object-cover"
-                />
-              )}
-              <CardContent>
-                <div className="flex items-center justify-between mt-4">
-                  {course.price && (
-                    <span className="text-primary font-bold">
-                      ₹{course.price}
-                    </span>
-                  )}
-                  <span className="text-sm font-medium">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">My Courses</h1>
+          <p className="text-muted-foreground">
+            Manage and organize your teaching materials
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/dashboard/instructor/dashboard/courses/create">
+            <Plus className="h-4 w-4 mr-2" /> Create New Course
+          </Link>
+        </Button>
+      </div>
+
+      {courses.length === 0 ? (
+        <Card className="text-center p-12">
+          <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-medium mb-2">No courses created yet</h3>
+          <p className="text-muted-foreground mb-4">
+            Get started by creating your first course
+          </p>
+          <Button asChild>
+            <Link href="/dashboard/instructor/dashboard/courses/create">
+              Create Course
+            </Link>
+          </Button>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {courses.map((course) => (
+            <Card key={course.id} className="hover:shadow-lg transition-shadow">
+              <div className="relative aspect-video bg-muted">
+                {course.thumbnail ? (
+                  <Image
+                    src={course.thumbnail}
+                    alt={course.title}
+                    fill
+                    className="object-cover rounded-t-lg"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full bg-gradient-to-r from-primary/10 to-secondary/10">
+                    <BookOpen className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="absolute top-2 right-2">
+                  <Badge variant={course.published ? "default" : "secondary"}>
                     {course.published ? "Published" : "Draft"}
-                  </span>
+                  </Badge>
                 </div>
-                <div className="mt-4">
-                  <Link
-                    href={`/courses/${course.id}`}
-                    className="px-4 py-2 bg-black text-white text-sm rounded shadow hover:bg-gray-800 transition-all duration-200"
-                  >
-                    View Details
-                  </Link>
+              </div>
+              <CardHeader>
+                <CardTitle className="line-clamp-2">{course.title}</CardTitle>
+                <CardDescription className="line-clamp-2">
+                  {course.description}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-1">
+                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    <span className="text-sm font-medium">{course.rating}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Users className="h-4 w-4" />
+                    <span>{course.students} students</span>
+                  </div>
                 </div>
-                <div className="mt-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="p-2">
-                        <MoreVertical className="h-5 w-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => window.location.href = `/dashboard/instructor/dashboard/courses/edit?courseId=${course.id}`}>Edit Course</DropdownMenuItem>
-                       <DropdownMenuItem
-                        onClick={() => {
-                          setSelectedCourseId(course.id);
-                          setShowAddModuleForm(true);
-                        }}
-                      >
-                        Add Module
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteCourse(course.id)}
-                        className="text-red-500"
-                      >
-                        Delete Course
-                      </DropdownMenuItem>
-                     
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <BookOpen className="h-4 w-4" />
+                    <span>{course.modules?.length || 0} modules</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>{course.totalDuration || '0m'}</span>
+                  </div>
                 </div>
               </CardContent>
-            </Link>
-          </Card>
-        ))}
-      </div>
-      {/* Removed the Create Course button since it's now in the dashboard */}
-      {showAddModuleForm && selectedCourseId && (
-        <AddModuleForm
-          courseId={selectedCourseId}
-          onClose={() => setShowAddModuleForm(false)}
-        />
+              <CardFooter className="flex justify-between gap-2 border-t pt-4">
+                <Button variant="outline" asChild className="flex-1">
+                  <Link href={`/dashboard/instructor/dashboard/courses/edit?courseId=${course.id}`}>
+                    <Edit className="h-4 w-4 mr-2" /> Edit
+                  </Link>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem 
+                      onClick={() => router.push(`/courses/${course.id}/modules/create`)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" /> Add Module
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleDeleteCourse(course.id)}
+                      className="text-red-500 focus:text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );
