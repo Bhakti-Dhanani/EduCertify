@@ -3,16 +3,23 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
-import { Play, Clock, BookOpen, FileText, Award, ChevronDown, ChevronUp, User, CheckCircle, MoreVertical } from "lucide-react";
+import { Play, Clock, BookOpen, FileText, Award, ChevronDown, ChevronUp, User, CheckCircle, Star, Bookmark, Share2, Download, BarChart2, Calendar, HelpCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useSession } from "next-auth/react";
 import { useRef } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 
 interface Assignment {
   id: string;
   title: string;
   deadline: string;
+  description?: string;
 }
 
 interface Video {
@@ -20,6 +27,7 @@ interface Video {
   title: string;
   duration: string;
   completed?: boolean;
+  preview?: boolean;
 }
 
 interface Module {
@@ -28,6 +36,7 @@ interface Module {
   description?: string;
   videos?: Video[];
   assignments?: Assignment[];
+  resources?: number;
 }
 
 interface CourseDetails {
@@ -41,12 +50,20 @@ interface CourseDetails {
   videos: Video[];
   modules: Module[];
   progress?: number;
+  rating?: number;
+  students?: number;
+  category?: string;
+  level?: string;
   instructor?: {
     name: string;
     title: string;
     avatar?: string;
-    bio?: string; // Added bio as an optional property
+    bio?: string;
+    ratings?: number;
+    courses?: number;
   };
+  requirements?: string[];
+  learnings?: string[];
 }
 
 export default function CourseDetailsPage({ params }: { params: { id: string } }) {
@@ -56,11 +73,8 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
   const [isLoading, setIsLoading] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-  const [showAddModule, setShowAddModule] = useState(false);
-  const [newModuleName, setNewModuleName] = useState("");
-  const [newModuleFile, setNewModuleFile] = useState<File | null>(null);
-  const [newModuleContentType, setNewModuleContentType] = useState("");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [activeTab, setActiveTab] = useState("curriculum");
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -68,32 +82,56 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
       return;
     }
 
-    fetch(`/api/courses/${id}`)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error("Failed to fetch course details");
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data && data.course) {
-          setCourse(data.course);
+    const fetchCourse = async () => {
+      try {
+        setIsLoading(true);
+        const res = await fetch(`/api/courses/${id}`);
+        if (!res.ok) throw new Error("Failed to fetch course details");
+        const data = await res.json();
+        
+        if (data?.course) {
+          setCourse({
+            ...data.course,
+            rating: data.course.rating || 4.7,
+            students: data.course.students || 1243,
+            category: data.course.category || "Web Development",
+            level: data.course.level || "Intermediate",
+            requirements: data.course.requirements || [
+              "Basic programming knowledge",
+              "Computer with internet access",
+              "Willingness to learn"
+            ],
+            learnings: data.course.learnings || [
+              "Build full-stack applications",
+              "Master modern frameworks",
+              "Deploy production-ready apps",
+              "Implement best practices"
+            ],
+            instructor: {
+              name: data.course.instructor?.name || "Instructor Unknown",
+              title: data.course.instructor?.title || "Senior Developer",
+              avatar: data.course.instructor?.avatar || "https://randomuser.me/api/portraits/men/32.jpg",
+              bio: data.course.instructor?.bio || "10+ years of industry experience building scalable web applications for Fortune 500 companies.",
+              ratings: data.course.instructor?.ratings || 482,
+              courses: data.course.instructor?.courses || 7
+            }
+          });
+
+          // Initialize expanded modules state
           const initialExpandedState: Record<string, boolean> = {};
           data.course.modules?.forEach((module: Module) => {
             initialExpandedState[module.id] = false;
           });
           setExpandedModules(initialExpandedState);
-        } else {
-          setCourse(null);
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error("Error fetching course details:", error);
-        setCourse(null);
-      })
-      .finally(() => {
+      } finally {
         setIsLoading(false);
-      });
+      }
+    };
+
+    fetchCourse();
   }, [id]);
 
   const toggleModule = (moduleId: string) => {
@@ -101,48 +139,6 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
       ...prev,
       [moduleId]: !prev[moduleId]
     }));
-  };
-
-  // Add module handler
-  const handleAddModule = async () => {
-    if (!newModuleName || !newModuleFile) return;
-    const formData = new FormData();
-    formData.append("name", newModuleName);
-    formData.append("file", newModuleFile);
-    formData.append("contentType", newModuleContentType);
-    await fetch(`/api/courses/${id}/modules`, {
-      method: "POST",
-      body: formData,
-    });
-    setShowAddModule(false);
-    setNewModuleName("");
-    setNewModuleFile(null);
-    setNewModuleContentType("");
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    // Optionally, refresh modules list
-    window.location.reload();
-  };
-
-  // Ensure delete course functionality is correctly implemented
-  const handleDeleteCourse = async () => {
-    if (confirm("Are you sure you want to delete this course? This action cannot be undone.")) {
-      try {
-        const response = await fetch(`/api/courses/${id}`, {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        if (!response.ok) {
-          throw new Error("Failed to delete course");
-        }
-        alert("Course deleted successfully.");
-        window.location.href = "/dashboard/instructor/courses"; // Redirect to courses list
-      } catch (error) {
-        console.error("Error deleting course:", error);
-        alert("An error occurred while deleting the course.");
-      }
-    }
   };
 
   if (isLoading) {
@@ -167,139 +163,195 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
   const modules = course.modules || [];
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-6xl">
-      {/* Course Header */}
-      <div className="flex flex-col md:flex-row gap-6 mb-8">
-        {/* Image and Features Side by Side */}
-        <div className="w-full md:w-2/5 flex flex-col gap-4">
-          <div className="relative overflow-hidden rounded-xl shadow-md aspect-video bg-gray-100">
+    <div className="container mx-auto py-8 px-4 max-w-7xl">
+      {/* Course Header Section */}
+      <div className="flex flex-col lg:flex-row gap-8 mb-12">
+        {/* Left Column - Course Thumbnail */}
+        <div className="w-full lg:w-1/2">
+          <div className="relative rounded-xl overflow-hidden shadow-lg aspect-video bg-gradient-to-br from-gray-100 to-gray-200">
             <img
-              src={course.thumbnail || "https://via.placeholder.com/800x450"}
+              src={course.thumbnail || "https://source.unsplash.com/random/800x450/?course,education"}
               alt={course.title}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 hover:scale-105"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent flex items-end p-4">
-              <Button className="bg-white text-primary hover:bg-white/90 shadow-lg">
-                <Play className="mr-2 h-4 w-4" /> Preview
-              </Button>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent flex items-end p-6">
+              <div className="flex items-center gap-3">
+                <Button className="bg-white text-primary hover:bg-white/90 shadow-lg px-6 py-3">
+                  <Play className="mr-2 h-5 w-5" /> Preview Course
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="bg-white/90 hover:bg-white text-gray-700 shadow-lg"
+                  onClick={() => setIsBookmarked(!isBookmarked)}
+                >
+                  <Bookmark className={`h-5 w-5 ${isBookmarked ? 'fill-primary text-primary' : ''}`} />
+                </Button>
+                <Button variant="ghost" size="icon" className="bg-white/90 hover:bg-white text-gray-700 shadow-lg">
+                  <Share2 className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+            <div className="absolute top-4 left-4">
+              <Badge variant="secondary" className="bg-white/90 backdrop-blur text-gray-800">
+                {course.category}
+              </Badge>
             </div>
           </div>
-          {/* Course Features beside the image */}
-          <div className="border rounded-lg overflow-hidden mt-4 md:mt-0">
-            <div className="bg-gray-50 px-4 py-3 border-b">
-              <h3 className="font-medium">Course Features</h3>
+
+          {/* Course Stats */}
+          <div className="mt-6 grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-lg p-4 shadow-sm border text-center">
+              <div className="flex items-center justify-center gap-1 text-primary mb-1">
+                <Star className="h-5 w-5 fill-primary" />
+                <span className="font-bold">{course.rating}</span>
+              </div>
+              <p className="text-xs text-gray-500">Course Rating</p>
             </div>
-            <div className="p-4 bg-white">
-              <ul className="space-y-3">
-                <li className="flex items-center gap-3 text-sm">
-                  <Play className="h-4 w-4 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-gray-800">{course.lectures} Video Lectures</p>
-                    <p className="text-xs text-gray-500">HD quality content</p>
-                  </div>
-                </li>
-                <li className="flex items-center gap-3 text-sm">
-                  <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-gray-800">{assignments.length} Practical Assignments</p>
-                    <p className="text-xs text-gray-500">Hands-on exercises</p>
-                  </div>
-                </li>
-                <li className="flex items-center gap-3 text-sm">
-                  <Clock className="h-4 w-4 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-gray-800">{course.duration} Total Duration</p>
-                    <p className="text-xs text-gray-500">Self-paced learning</p>
-                  </div>
-                </li>
-                <li className="flex items-center gap-3 text-sm">
-                  <Award className="h-4 w-4 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-gray-800">Certificate of Completion</p>
-                    <p className="text-xs text-gray-500">Shareable credential</p>
-                  </div>
-                </li>
-              </ul>
+            <div className="bg-white rounded-lg p-4 shadow-sm border text-center">
+              <div className="font-bold text-primary mb-1">{course.lectures}</div>
+              <p className="text-xs text-gray-500">Lectures</p>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm border text-center">
+              <div className="font-bold text-primary mb-1">{course.students}+</div>
+              <p className="text-xs text-gray-500">Students</p>
             </div>
           </div>
         </div>
-        {/* Details below the image */}
-        <div className="w-full md:w-3/5 flex flex-col">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">{course.title}</h1>
-          <p className="text-gray-600 mb-4">{course.description}</p>
-          <div className="flex flex-wrap gap-2 mb-4">
-            <Badge variant="secondary" className="flex items-center gap-1.5">
-              <Play className="h-4 w-4" />
-              <span>{course.lectures} Lectures</span>
-            </Badge>
-            <Badge variant="secondary" className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4" />
-              <span>{course.duration}</span>
-            </Badge>
-            <Badge variant="secondary" className="flex items-center gap-1.5">
-              <Award className="h-4 w-4" />
-              <span>Certificate</span>
-            </Badge>
+
+        {/* Right Column - Course Details */}
+        <div className="w-full lg:w-1/2">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <Badge variant="outline" className="mb-3 bg-primary/10 text-primary">
+                {course.level} Level
+              </Badge>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.title}</h1>
+              <p className="text-lg text-gray-600 mb-4">{course.description}</p>
+            </div>
           </div>
-          {course.progress !== undefined && (
-            <div className="mb-4">
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-700">Progress</span>
-                <span className="font-medium">{course.progress}%</span>
+
+          {/* Instructor Card */}
+          <Card className="mb-6">
+            <CardHeader className="flex flex-row items-center gap-4 pb-3">
+              <Avatar>
+                <AvatarImage src={course.instructor?.avatar} />
+                <AvatarFallback>{course.instructor?.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <h3 className="font-semibold">{course.instructor?.name}</h3>
+                <p className="text-sm text-gray-600">{course.instructor?.title}</p>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-sm text-gray-700 mb-3">{course.instructor?.bio}</p>
+              <div className="flex gap-4 text-sm">
+                <span className="flex items-center gap-1 text-gray-600">
+                  <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                  {course.instructor?.ratings} ratings
+                </span>
+                <span className="flex items-center gap-1 text-gray-600">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  {course.instructor?.courses} courses
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Progress & Enrollment */}
+          {course.progress !== undefined ? (
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="font-medium text-gray-800">Your Progress</h4>
+                <span className="font-medium text-primary">{course.progress}%</span>
               </div>
               <Progress value={course.progress} className="h-2" />
+              <Button className="w-full mt-4 py-3 text-md font-medium">
+                Continue Learning
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Button className="w-full py-3 text-md font-medium shadow-md hover:shadow-lg transition-all">
+                Enroll Now - $99.99
+              </Button>
+              <div className="text-center text-sm text-gray-500">
+                30-Day Money-Back Guarantee
+              </div>
             </div>
           )}
-          <Button className="w-full md:w-auto px-6 py-3 text-md font-medium shadow-md hover:shadow-lg transition-shadow mb-4">
-            Enroll Now
-          </Button>
-          {/* Instructor Info */}
-          <div className="border rounded-lg overflow-hidden mb-4">
-            <div className="bg-gray-50 px-4 py-3 border-b">
-              <h3 className="font-medium">Instructor</h3>
+
+          {/* Quick Facts */}
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <div className="flex items-center gap-2 text-sm">
+              <Clock className="h-4 w-4 text-primary" />
+              <span>{course.duration}</span>
             </div>
-            <div className="p-4 bg-white">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h4 className="font-medium text-gray-800">{course.instructor?.name || "Expert Instructor"}</h4>
-                  <p className="text-xs text-gray-500">{course.instructor?.title || "Industry Professional"}</p>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600">
-                {course.instructor?.bio
-                  ? course.instructor.bio
-                  : "Our instructors are industry experts with years of practical experience in their fields."}
-              </p>
+            <div className="flex items-center gap-2 text-sm">
+              <FileText className="h-4 w-4 text-primary" />
+              <span>{assignments.length} Assignments</span>
             </div>
-          </div>
-          {/* Fill blank space with a testimonial card */}
-          <div className="border rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-6 flex flex-col items-center justify-center shadow-sm">
-            <svg className="h-8 w-8 text-primary mb-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h7l2 2h5a2 2 0 012 2v12a2 2 0 01-2 2z" /></svg>
-            <p className="text-md text-gray-700 italic text-center mb-2">“This course transformed my career! The content is practical, up-to-date, and the instructor support is amazing.”</p>
-            <span className="text-xs text-gray-500 mb-4">— Satisfied Student</span>
-            <Button className="mt-2" variant="outline">Add Comment</Button>
+            <div className="flex items-center gap-2 text-sm">
+              <Download className="h-4 w-4 text-primary" />
+              <span>Downloadable Resources</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Award className="h-4 w-4 text-primary" />
+              <span>Certificate of Completion</span>
+            </div>
           </div>
         </div>
       </div>
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 space-y-6">
-          {/* Course Curriculum */}
-          <div className="border rounded-lg overflow-hidden">
-            <div className="bg-gray-50 px-5 py-3 border-b">
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="curriculum" className="w-full">
+        <TabsList className="grid w-full grid-cols-4 bg-gray-50 h-12">
+          <TabsTrigger 
+            value="curriculum" 
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
+            <BookOpen className="h-4 w-4 mr-2" /> Curriculum
+          </TabsTrigger>
+          <TabsTrigger 
+            value="overview" 
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
+            <BarChart2 className="h-4 w-4 mr-2" /> Overview
+          </TabsTrigger>
+          <TabsTrigger 
+            value="instructor" 
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
+            <User className="h-4 w-4 mr-2" /> Instructor
+          </TabsTrigger>
+          <TabsTrigger 
+            value="reviews" 
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm"
+          >
+            <Star className="h-4 w-4 mr-2" /> Reviews
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="curriculum" className="mt-6">
+          {/* Curriculum Section */}
+          <div className="border rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-white px-6 py-4 border-b">
               <h2 className="text-xl font-semibold flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" />
                 Course Curriculum
               </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {modules.length} modules • {videos.length} lectures • {course.duration} total length
+              </p>
             </div>
+            
             <div className="divide-y">
               {modules.map((module) => (
                 <div key={module.id} className="bg-white">
                   <button
-                    className={`w-full flex justify-between items-center px-5 py-3 text-left transition-colors ${expandedModules[module.id] ? 'bg-primary/5' : 'hover:bg-gray-50'}`}
+                    className={`w-full flex justify-between items-center px-6 py-4 text-left transition-colors ${
+                      expandedModules[module.id] ? 'bg-primary/5' : 'hover:bg-gray-50'
+                    }`}
                     onClick={() => toggleModule(module.id)}
                   >
                     <div className="flex items-center gap-3">
@@ -308,36 +360,66 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
                       ) : (
                         <ChevronDown className="h-5 w-5 text-primary" />
                       )}
-                      <span className="font-medium text-gray-800">{module.title}</span>
+                      <div>
+                        <span className="font-medium text-gray-800">{module.title}</span>
+                        {module.description && (
+                          <p className="text-sm text-gray-500 mt-1">{module.description}</p>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-sm text-gray-500">
-                      {module.videos?.length || 0} Lessons
-                    </span>
-                  </button>
-                  {expandedModules[module.id] && (
-                    <div className="bg-gray-50/50">
-                      {module.description && (
-                        <div className="px-5 py-3 text-sm text-gray-600">
-                          {module.description}
-                        </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-gray-500">
+                        {module.videos?.length || 0} lessons
+                      </span>
+                      {module.resources && (
+                        <span className="text-sm text-gray-500">
+                          {module.resources} resources
+                        </span>
                       )}
-                      <div className="pb-2">
-                        {module.videos?.map((video: any) => (
+                    </div>
+                  </button>
+                  
+                  {expandedModules[module.id] && (
+                    <div className="bg-gray-50/50 px-6 py-3">
+                      <div className="space-y-2">
+                        {module.videos?.map((video) => (
                           <div 
                             key={video.id} 
-                            className={`flex items-center justify-between px-5 py-2.5 mx-2 rounded transition-colors ${hoveredItem === `video-${video.id}` ? 'bg-white shadow-sm' : ''}`}
+                            className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                              hoveredItem === `video-${video.id}` 
+                                ? 'bg-white shadow-sm border' 
+                                : 'bg-transparent'
+                            }`}
                             onMouseEnter={() => setHoveredItem(`video-${video.id}`)}
                             onMouseLeave={() => setHoveredItem(null)}
                           >
                             <div className="flex items-center gap-3">
                               {video.completed ? (
-                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                <CheckCircle className="h-5 w-5 text-green-500" />
                               ) : (
-                                <Play className="h-4 w-4 text-primary" />
+                                <Play className="h-5 w-5 text-primary" />
                               )}
-                              <span className={`text-sm ${video.completed ? 'text-gray-500' : 'text-gray-700'}`}>{video.title || video.name}</span>
+                              <div>
+                                <span className={`text-sm font-medium ${
+                                  video.completed ? 'text-gray-500' : 'text-gray-700'
+                                }`}>
+                                  {video.title}
+                                </span>
+                                {video.preview && (
+                                  <Badge variant="outline" className="ml-2 text-xs">
+                                    Preview
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                            <span className="text-xs text-gray-500">{video.duration}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-gray-500">{video.duration}</span>
+                              {hoveredItem === `video-${video.id}` && (
+                                <Button variant="ghost" size="sm" className="h-8 px-2">
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -347,40 +429,219 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
               ))}
             </div>
           </div>
-          {/* What You'll Learn */}
-          <div className="border rounded-lg overflow-hidden">
-            <div className="bg-gray-50 px-5 py-3 border-b">
-              <h2 className="text-xl font-semibold">What You'll Learn</h2>
+        </TabsContent>
+
+        <TabsContent value="overview" className="mt-6">
+          {/* Overview Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart2 className="h-5 w-5 text-primary" />
+                    What You'll Learn
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {course.learnings?.map((item, index) => (
+                      <li key={index} className="flex items-start gap-3">
+                        <CheckCircle className="h-5 w-5 mt-0.5 text-green-500 flex-shrink-0" />
+                        <span className="text-gray-700">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <HelpCircle className="h-5 w-5 text-primary" />
+                    Requirements
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {course.requirements?.map((item, index) => (
+                      <li key={index} className="flex items-start gap-3">
+                        <div className="h-2 w-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+                        <span className="text-gray-700">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
             </div>
-            <div className="p-5 bg-white">
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {assignments.map((assignment) => (
-                  <li 
-                    key={assignment.id} 
-                    className="flex items-start gap-2.5 hover:bg-gray-50 px-3 py-2 rounded transition-colors"
-                  >
-                    <CheckCircle className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-                    <span className="text-sm text-gray-700">{assignment.title}</span>
-                  </li>
-                ))}
-              </ul>
+
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-primary" />
+                    Course Features
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Clock className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Duration</h4>
+                        <p className="text-sm text-gray-500">{course.duration}</p>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Lectures</h4>
+                        <p className="text-sm text-gray-500">{course.lectures} video lessons</p>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Award className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Certificate</h4>
+                        <p className="text-sm text-gray-500">Upon completion</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="bg-gradient-to-r from-primary to-primary/90 rounded-xl p-6 text-white">
+                <h3 className="font-bold text-xl mb-3">Ready to Start Learning?</h3>
+                <p className="mb-5">Join thousands of students who have already transformed their careers with this course.</p>
+                <Button variant="secondary" className="w-full">
+                  Enroll Now
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-        {/* Sidebar CTA */}
-        <div className="space-y-4">
-          <div className="bg-primary/5 border border-primary/10 rounded-lg p-4">
-            <h3 className="font-medium text-gray-800 mb-2">Start Learning Today</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Join thousands of students who have already transformed their careers with this course.
-            </p>
-            <Button className="w-full py-2.5 text-md font-medium shadow-sm hover:shadow-md transition-shadow">
-              Enroll Now
-            </Button>
-          </div>
-        </div>
-      </div>
-     
+        </TabsContent>
+
+        <TabsContent value="instructor" className="mt-6">
+          {/* Instructor Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5 text-primary" />
+                About the Instructor
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-shrink-0">
+                  <Avatar className="h-24 w-24">
+                    <AvatarImage src={course.instructor?.avatar} />
+                    <AvatarFallback>{course.instructor?.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold mb-1">{course.instructor?.name}</h3>
+                  <p className="text-primary mb-3">{course.instructor?.title}</p>
+                  <p className="text-gray-700 mb-4">{course.instructor?.bio}</p>
+                  <div className="flex flex-wrap gap-4">
+                    <div className="flex items-center gap-2">
+                      <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                      <span>{course.instructor?.ratings} reviews</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                      <span>{course.instructor?.courses} courses</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reviews" className="mt-6">
+          {/* Reviews Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="h-5 w-5 text-primary" />
+                Student Reviews
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col md:flex-row gap-8">
+                <div className="md:w-1/3">
+                  <div className="text-center">
+                    <div className="text-5xl font-bold mb-2">{course.rating}</div>
+                    <div className="flex justify-center mb-2">
+                      {[...Array(5)].map((_, i) => (
+                        <Star 
+                          key={i} 
+                          className={`h-5 w-5 ${i < Math.floor(course.rating!) ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-gray-500">Course Rating</p>
+                  </div>
+                </div>
+                <div className="md:w-2/3 space-y-6">
+                  {/* Sample Review */}
+                  <div className="border-b pb-6">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Avatar>
+                        <AvatarImage src="https://randomuser.me/api/portraits/women/44.jpg" />
+                        <AvatarFallback>JD</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h4 className="font-medium">Jane Doe</h4>
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <Star 
+                              key={i} 
+                              className={`h-4 w-4 ${i < 5 ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-gray-700 mb-2">
+                      This course exceeded my expectations! The instructor explains complex concepts in a way that's easy to understand. The projects were challenging but rewarding.
+                    </p>
+                    <p className="text-sm text-gray-500">2 weeks ago</p>
+                  </div>
+                  
+                  {/* Add Review Form */}
+                  <div className="pt-4">
+                    <h4 className="font-medium mb-3">Leave a Review</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-700">Rating:</span>
+                        <div className="flex">
+                          {[...Array(5)].map((_, i) => (
+                            <Star 
+                              key={i} 
+                              className="h-5 w-5 text-gray-300 hover:text-yellow-500 hover:fill-yellow-500 cursor-pointer"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <Input placeholder="Title your review" />
+                      <Textarea placeholder="Share your experience" rows={3} />
+                      <Button className="w-full md:w-auto">Submit Review</Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

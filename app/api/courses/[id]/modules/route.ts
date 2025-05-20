@@ -99,38 +99,44 @@ export async function POST(
     }
 
     const body = await req.json();
-    
+    console.log("Incoming request body:", body);
+
     // Validate request data
     const result = moduleSchema.safeParse(body);
-    
+
     if (!result.success) {
+      console.error("Validation failed:", result.error.issues);
       return NextResponse.json(
         { error: "Invalid data", issues: result.error.issues },
         { status: 400 }
       );
     }
-    
+
     const { title, type, content, order } = result.data;
-    
-    // Create new module
-    const module = await prisma.module.create({
-      data: {
-        title,
-        type,
-        content,
-        order,
-        courseId,
-      },
-    });
-    
-    return NextResponse.json(
-      {
-        message: "Module created successfully",
-        module,
-      },
-      { status: 201 }
-    );
-    
+
+    try {
+      // Create new module
+      const module = await prisma.module.create({
+        data: {
+          title,
+          type,
+          content,
+          order,
+          courseId,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          message: "Module created successfully",
+          module,
+        },
+        { status: 201 }
+      );
+    } catch (prismaError) {
+      console.error("Prisma error during module creation:", prismaError);
+      throw prismaError;
+    }
   } catch (error) {
     console.error("Error creating module:", error);
     return NextResponse.json(
