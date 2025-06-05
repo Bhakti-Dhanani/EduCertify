@@ -1,30 +1,58 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { useParams } from "next/navigation";
-import { Textarea } from "@/components/ui/textarea";
+
+const lessonTypes = [
+  { value: "pdf", label: "PDF" },
+  { value: "docs", label: "Docs File" },
+  { value: "video", label: "Video Content" },
+  { value: "text", label: "Text Content" },
+  { value: "quiz", label: "Quiz" },
+];
 
 export default function CreateModulePage() {
   const { id: courseId } = useParams();
-  const [moduleData, setModuleData] = useState({
+  const router = useRouter(); // Reintroduce useRouter for navigation
+
+  const [moduleTitle, setModuleTitle] = useState<string>("");
+  const [lessons, setLessons] = useState<Array<{ title: string; type: string; description?: string; link?: string }>>([]);
+  const [showLessonForm, setShowLessonForm] = useState<boolean>(false);
+  const [lessonDetails, setLessonDetails] = useState<{ title: string; type: string; description?: string; link?: string }>({
     title: "",
-    type: "TEXT",
-    content: "",
-    order: 0
+    type: "",
+    description: "",
+    link: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
 
-  const handleSubmit = async () => {
-    if (!moduleData.title || !moduleData.type) {
+  const addLesson = () => {
+    if (!moduleTitle) {
+      toast({
+        title: "Error",
+        description: "Please add a module title before adding lessons.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowLessonForm(true);
+  };
+
+  const saveLesson = () => {
+    setLessons((prev) => [...prev, { ...lessonDetails }]);
+    setLessonDetails({ title: "", type: "", description: "", link: "" });
+    setShowLessonForm(false);
+  };
+
+  const saveModule = async () => {
+    if (!moduleTitle || lessons.length === 0) {
       toast({
         title: "Error",
         description: "Please fill all required fields before submitting.",
@@ -41,7 +69,10 @@ export default function CreateModulePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(moduleData),
+        body: JSON.stringify({
+          module: { title: moduleTitle },
+          lessons,
+        }),
       });
 
       const data = await response.json();
@@ -52,12 +83,12 @@ export default function CreateModulePage() {
 
       toast({
         title: "Success",
-        description: "Module created successfully!",
+        description: "Module and lessons created successfully!",
       });
-      
-      router.push(`/dashboard/instructor/courses/${courseId}`);
+
+      router.push(`/courses/${courseId}`);
     } catch (error) {
-      console.error("Error creating module:", error);
+      console.error("Error creating module and lessons:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "An unexpected error occurred",
@@ -68,21 +99,66 @@ export default function CreateModulePage() {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setModuleData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleTypeChange = (value: string) => {
-    setModuleData(prev => ({
-      ...prev,
-      type: value,
-      // Reset content when type changes
-      content: ""
-    }));
+  const renderContentBox = () => {
+    switch (lessonDetails.type) {
+      case "video":
+        return (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium mb-2">Video URL</label>
+            <Input
+              type="url"
+              placeholder="Enter video URL"
+              value={lessonDetails.link || ""}
+              onChange={(e) =>
+                setLessonDetails((prev) => ({ ...prev, link: e.target.value }))
+              }
+            />
+          </div>
+        );
+      case "pdf":
+      case "docs":
+        return (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium mb-2">File URL</label>
+            <Input
+              type="url"
+              placeholder="Enter file URL"
+              value={lessonDetails.link || ""}
+              onChange={(e) =>
+                setLessonDetails((prev) => ({ ...prev, link: e.target.value }))
+              }
+            />
+          </div>
+        );
+      case "text":
+        return (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium mb-2">Text Content</label>
+            <Textarea
+              placeholder="Enter text content"
+              value={lessonDetails.description || ""}
+              onChange={(e) =>
+                setLessonDetails((prev) => ({ ...prev, description: e.target.value }))
+              }
+            />
+          </div>
+        );
+      case "quiz":
+        return (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium mb-2">Quiz Details</label>
+            <Textarea
+              placeholder="Enter quiz details"
+              value={lessonDetails.description || ""}
+              onChange={(e) =>
+                setLessonDetails((prev) => ({ ...prev, description: e.target.value }))
+              }
+            />
+          </div>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -96,94 +172,76 @@ export default function CreateModulePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="title">Module Title*</Label>
+            <label className="block text-sm font-medium mb-2">Module Title</label>
             <Input
-              id="title"
-              name="title"
-              placeholder="Introduction to Course Content"
-              value={moduleData.title}
-              onChange={handleInputChange}
+              value={moduleTitle}
+              onChange={(e) => setModuleTitle(e.target.value)}
+              placeholder="Enter module title"
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Module Type*</Label>
-            <Select
-              value={moduleData.type}
-              onValueChange={handleTypeChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select module type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TEXT">Text Lesson</SelectItem>
-                <SelectItem value="VIDEO">Video Lesson</SelectItem>
-                <SelectItem value="PDF">PDF Document</SelectItem>
-                <SelectItem value="QUIZ">Quiz/Assessment</SelectItem>
-                <SelectItem value="ASSIGNMENT">Assignment</SelectItem>
-              </SelectContent>
-            </Select>
+            <Button onClick={addLesson}>Add Lesson</Button>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="order">Display Order*</Label>
-            <Input
-              id="order"
-              name="order"
-              type="number"
-              min="0"
-              placeholder="0"
-              value={moduleData.order}
-              onChange={handleInputChange}
-            />
-            <p className="text-sm text-muted-foreground">
-              Determines the sequence of modules in the course (lower numbers appear first)
-            </p>
-          </div>
+          {showLessonForm && (
+            <div className="mb-6 border p-4 rounded">
+              <h2 className="text-xl font-bold mb-4">Add Lesson</h2>
 
-          <div className="space-y-2">
-            <Label htmlFor="content">
-              {moduleData.type === "TEXT" && "Lesson Content"}
-              {moduleData.type === "VIDEO" && "Video URL or Embed Code"}
-              {moduleData.type === "PDF" && "PDF URL or Embed Code"}
-              {moduleData.type === "QUIZ" && "Quiz Questions (JSON format)"}
-              {moduleData.type === "ASSIGNMENT" && "Assignment Instructions"}
-            </Label>
-            
-            {moduleData.type === "TEXT" ? (
-              <Textarea
-                id="content"
-                name="content"
-                placeholder="Enter your lesson content here (supports markdown)"
-                value={moduleData.content}
-                onChange={handleInputChange}
-                rows={8}
-              />
-            ) : (
-              <Input
-                id="content"
-                name="content"
-                placeholder={
-                  moduleData.type === "VIDEO" ? "https://example.com/video.mp4 or <iframe>..." :
-                  moduleData.type === "PDF" ? "https://example.com/document.pdf" :
-                  moduleData.type === "QUIZ" ? '{"questions": [...]}' :
-                  "Describe the assignment requirements"
-                }
-                value={moduleData.content}
-                onChange={handleInputChange}
-              />
-            )}
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium mb-2">Lesson Title</label>
+                  <Input
+                    type="text"
+                    placeholder="Enter lesson title"
+                    value={lessonDetails.title}
+                    onChange={(e) =>
+                      setLessonDetails((prev) => ({ ...prev, title: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium mb-2">Lesson Type</label>
+                  <Select onValueChange={(value) => setLessonDetails((prev) => ({ ...prev, type: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select lesson type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lessonTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {renderContentBox()}
+                <Button onClick={saveLesson}>Save Lesson</Button>
+              </div>
+            </div>
+          )}
+
+          <div className="mb-6">
+            <h2 className="text-xl font-bold mb-4">Lessons</h2>
+            {lessons.map((lesson, index) => (
+              <div key={index} className="border p-4 rounded mb-4">
+                <p className="font-medium">Title: {lesson.title}</p>
+                <p>Type: {lesson.type}</p>
+                {lesson.type === "description" && <p>Description: {lesson.description}</p>}
+                {lesson.type === "link" && <p>Link: {lesson.link}</p>}
+              </div>
+            ))}
           </div>
         </CardContent>
         <CardFooter className="flex justify-between gap-4 border-t pt-6">
           <Button 
             variant="outline" 
-            onClick={() => router.push(`/dashboard/instructor/courses/${courseId}`)}
+            onClick={() => router.push(`/dashboard/instructor/dashboard/courses`)}
           >
             Cancel
           </Button>
           <Button 
-            onClick={handleSubmit}
+            onClick={saveModule}
             disabled={isSubmitting}
           >
             {isSubmitting ? "Creating..." : "Create Module"}

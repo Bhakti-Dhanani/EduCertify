@@ -49,7 +49,7 @@ export async function GET(req: Request) {
         _count: {
           select: {
             enrollments: true,
-            modules: true,
+            modules: true, // Include module count for each course
           },
         },
       },

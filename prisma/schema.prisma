@@ -107,9 +107,11 @@ model Module {
   order     Int
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+  File      File[]
   course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
   progress  ModuleProgress[]
   quizzes   Quiz[]
+  lessons   Lesson[]         @relation("ModuleLessons")
 }
 
 model ModuleProgress {
@@ -252,6 +254,28 @@ model CertificateTemplate {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   certificates Certificate[]
+}
+
+model File {
+  id       String @id
+  name     String
+  url      String
+  type     String
+  size     Int
+  moduleId String
+  Module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  title       String
+  type        String
+  description String?
+  link        String?
+  moduleId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade, name: "ModuleLessons")
 }
 
 enum Role {

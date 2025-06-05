@@ -99,20 +99,22 @@ export async function POST(
     }
 
     const body = await req.json();
-    console.log("Incoming request body:", body);
+    console.log("Parsed request body:", body); // Debugging log
 
-    // Validate request data
-    const result = moduleSchema.safeParse(body);
-
-    if (!result.success) {
-      console.error("Validation failed:", result.error.issues);
+    const parsedBody = moduleSchema.safeParse(body);
+    if (!parsedBody.success) {
+      console.error("Validation failed:", parsedBody.error);
       return NextResponse.json(
-        { error: "Invalid data", issues: result.error.issues },
+        {
+          error: "Invalid data",
+          issues: parsedBody.error.issues,
+        },
         { status: 400 }
       );
     }
 
-    const { title, type, content, order } = result.data;
+    const { title, type, content, order } = parsedBody.data; // Ensure order is validated as a number
+    console.log("Validated order field:", body.order); // Ensure order is received as a number
 
     try {
       // Create new module
