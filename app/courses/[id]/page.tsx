@@ -134,12 +134,111 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
     fetchCourse();
   }, [id]);
 
-  const toggleModule = (moduleId: string) => {
-    setExpandedModules(prev => ({
-      ...prev,
-      [moduleId]: !prev[moduleId]
-    }));
+  useEffect(() => {
+    const fetchCourseDuration = async () => {
+      try {
+        const res = await fetch(`/api/courses/${id}/duration`);
+        if (!res.ok) throw new Error("Failed to fetch course duration");
+        const data = await res.json();
+        setCourse((prev) => (prev ? { ...prev, duration: data.totalDuration } : null));
+      } catch (error) {
+        console.error("Error fetching course duration:", error);
+      }
+    };
+
+    fetchCourseDuration();
+  }, [id]);
+
+  useEffect(() => {
+    const fetchModules = async () => {
+      try {
+        const res = await fetch(`/api/courses/${id}/modules`);
+        if (!res.ok) throw new Error("Failed to fetch modules");
+        const data = await res.json();
+        setCourse((prev) => (prev ? { ...prev, modules: data.modules } : null));
+      } catch (error) {
+        console.error("Error fetching modules:", error);
+      }
+    };
+
+    fetchModules();
+  }, [id]);
+
+  const fetchModuleContent = async (moduleId: string) => {
+    try {
+      const res = await fetch(`/api/courses/${id}/modules/${moduleId}`);
+      if (!res.ok) throw new Error("Failed to fetch module content");
+      const data = await res.json();
+      setExpandedModules((prev) => ({
+        ...prev,
+        [moduleId]: !prev[moduleId],
+      }));
+      setCourse((prev) => {
+        if (!prev) return null;
+        const updatedModules = prev.modules.map((module) =>
+          module.id === moduleId ? { ...module, content: data.content } : module
+        );
+        return { ...prev, modules: updatedModules };
+      });
+    } catch (error) {
+      console.error("Error fetching module content:", error);
+    }
   };
+
+  const toggleModule = async (moduleId: string) => {
+    try {
+      const res = await fetch(`/api/courses/${id}/modules/${moduleId}`);
+      if (!res.ok) throw new Error("Failed to fetch module content");
+      const data = await res.json();
+
+      setExpandedModules((prev) => ({
+        ...prev,
+        [moduleId]: !prev[moduleId],
+      }));
+
+      setCourse((prev) => {
+        if (!prev) return null;
+        const updatedModules = prev.modules.map((module) =>
+          module.id === moduleId ? { ...module, videos: data.videos } : module
+        );
+        return { ...prev, modules: updatedModules };
+      });
+    } catch (error) {
+      console.error("Error fetching module content:", error);
+    }
+  };
+
+  useEffect(() => {
+    const fetchInstructorDetails = async () => {
+      try {
+        const res = await fetch(`/api/courses/${id}`);
+        if (!res.ok) throw new Error("Failed to fetch course details");
+        const data = await res.json();
+
+        if (data?.course?.instructors?.length > 0) {
+          const instructor = data.course.instructors[0];
+          setCourse((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              instructor: {
+                name: instructor.name,
+                title: "Instructor", // Default title as it's not in the response
+                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(instructor.name)}&background=random`,
+                bio: "", // Default bio as it's not in the response
+                ratings: 0, // Default ratings as it's not in the response
+                courses: 0, // Default courses as it's not in the response
+              },
+            };
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching instructor details:", error);
+      }
+    };
+
+    fetchInstructorDetails();
+  }, [id]);
 
   if (isLoading) {
     return (
@@ -369,7 +468,7 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-sm text-gray-500">
-                        {module.videos?.length || 0} lessons
+                        {module.videos?.length ?? 0} lessons
                       </span>
                       {module.resources && (
                         <span className="text-sm text-gray-500">
@@ -433,98 +532,43 @@ export default function CourseDetailsPage({ params }: { params: { id: string } }
 
         <TabsContent value="overview" className="mt-6">
           {/* Overview Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart2 className="h-5 w-5 text-primary" />
-                    What You'll Learn
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {course.learnings?.map((item, index) => (
-                      <li key={index} className="flex items-start gap-3">
-                        <CheckCircle className="h-5 w-5 mt-0.5 text-green-500 flex-shrink-0" />
-                        <span className="text-gray-700">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <HelpCircle className="h-5 w-5 text-primary" />
-                    Requirements
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {course.requirements?.map((item, index) => (
-                      <li key={index} className="flex items-start gap-3">
-                        <div className="h-2 w-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                        <span className="text-gray-700">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    Course Features
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <Clock className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Duration</h4>
-                        <p className="text-sm text-gray-500">{course.duration}</p>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <FileText className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Lectures</h4>
-                        <p className="text-sm text-gray-500">{course.lectures} video lessons</p>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <Award className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Certificate</h4>
-                        <p className="text-sm text-gray-500">Upon completion</p>
-                      </div>
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold">Modules</h2>
+            {modules.length > 0 ? (
+              <div className="space-y-4">
+                {modules.map((module) => (
+                  <div key={module.id} className="border rounded-lg p-4 shadow-sm">
+                    <h3 className="text-lg font-bold text-gray-800">{module.title}</h3>
+                    {module.description && (
+                      <p className="text-sm text-gray-600 mt-2">{module.description}</p>
+                    )}
+                    <div className="mt-4 space-y-2">
+                      {module.videos?.length > 0 && (
+                        <div>
+                          <h4 className="text-md font-medium text-gray-700">Videos</h4>
+                          <ul className="list-disc list-inside text-sm text-gray-600">
+                            {module.videos?.map((video) => (
+                              <li key={video.id} className="flex justify-between">
+                                <span>{video.title}</span>
+                                <span>{video.duration}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {module.resources && (
+                        <div>
+                          <h4 className="text-md font-medium text-gray-700">Resources</h4>
+                          <p className="text-sm text-gray-600">{module.resources} downloadable resources</p>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-
-              <div className="bg-gradient-to-r from-primary to-primary/90 rounded-xl p-6 text-white">
-                <h3 className="font-bold text-xl mb-3">Ready to Start Learning?</h3>
-                <p className="mb-5">Join thousands of students who have already transformed their careers with this course.</p>
-                <Button variant="secondary" className="w-full">
-                  Enroll Now
-                </Button>
+                ))}
               </div>
-            </div>
+            ) : (
+              <p className="text-gray-600">No modules available for this course.</p>
+            )}
           </div>
         </TabsContent>
 

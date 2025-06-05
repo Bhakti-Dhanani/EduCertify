@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Plus, BookOpen, Edit, Trash2, Clock, Star, Users } from "lucide-react";
+import { MoreVertical, Plus, BookOpen, Edit, Trash2, Clock, Star, Users, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -41,6 +41,10 @@ interface Course {
   students?: number;
   rating?: number;
   totalDuration?: string;
+  totalModules?: number; // Add totalModules to the Course interface
+  _count?: {
+    modules?: number;
+  };
 }
 
 export const dynamic = "force-static";
@@ -73,11 +77,14 @@ export default function InstructorCoursesPage() {
           const minutes = totalMinutes % 60;
           const totalDuration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
+          const totalModules = course.modules?.length || 0; // Calculate total modules
+
           return {
             ...course,
             students: Math.floor(Math.random() * 1000),
             rating: (Math.random() * 1 + 4).toFixed(1),
-            totalDuration
+            totalDuration,
+            totalModules, // Add totalModules to the course object
           };
         });
         setCourses(enhancedCourses);
@@ -206,7 +213,7 @@ export default function InstructorCoursesPage() {
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <BookOpen className="h-4 w-4" />
-                    <span>{course.modules?.length || 0} modules</span>
+                    <span>{course._count?.modules || 0} modules</span> {/* Display total modules using _count */}
                   </div>
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <Clock className="h-4 w-4" />
@@ -231,6 +238,11 @@ export default function InstructorCoursesPage() {
                       onClick={() => router.push(`/courses/${course.id}/modules/create`)}
                     >
                       <Plus className="h-4 w-4 mr-2" /> Add Module
+                    </DropdownMenuItem>
+                     <DropdownMenuItem 
+                      onClick={() => router.push(`/courses/${course.id}`)}
+                    >
+                      <Eye className="h-4 w-4 mr-2" /> View Details
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => handleDeleteCourse(course.id)}
